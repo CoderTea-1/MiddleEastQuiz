@@ -1,36 +1,44 @@
 let currentIndex = 0;
 let score = 0;
 
-// 80+ locations (subset shown; add all your locations here)
+// All locations from your original list with type and coordinates
+// type: "country", "river", "sea", "city", "mountain"
+// For rivers/cities/seas, click within radius counts as correct
 const LOCATIONS = [
-  {name:"Amu Darya", lat:41, lon:63, country:"Afghanistan", type:"river"},
-  {name:"Syr Darya", lat:44, lon:67, country:"Kazakhstan", type:"river"},
-  {name:"Indus", lat:30, lon:70, country:"Pakistan", type:"river"},
-  {name:"Euphrates", lat:34, lon:40, country:"Iraq", type:"river"},
-  {name:"Tigris", lat:35, lon:44, country:"Iraq", type:"river"},
-  {name:"Nile", lat:26, lon:31, country:"Egypt", type:"river"},
-  {name:"Aral Sea", lat:45, lon:61, country:"Kazakhstan", type:"sea"},
-  {name:"Black Sea", lat:43, lon:35, country:"Turkey", type:"sea"},
-  {name:"Caspian Sea", lat:41, lon:50, country:"Kazakhstan", type:"sea"},
-  {name:"Indian Ocean", lat:-20, lon:80, country:"India", type:"sea"},
-  {name:"Mediterranean Sea", lat:34, lon:18, country:"Egypt", type:"sea"},
-  {name:"Persian Gulf", lat:25, lon:50, country:"Saudi Arabia", type:"sea"},
-  {name:"Red Sea", lat:20, lon:38, country:"Egypt", type:"sea"},
-  {name:"Bosphorus", lat:41, lon:29, country:"Turkey", type:"sea"},
-  {name:"Dardanelles", lat:40, lon:26, country:"Turkey", type:"sea"},
-  {name:"Suez Canal", lat:30, lon:32, country:"Egypt", type:"river"},
-  {name:"Bab el-Mandeb", lat:12, lon:43, country:"Yemen", type:"sea"},
-  {name:"Hormuz", lat:27, lon:56, country:"Iran", type:"sea"},
-  {name:"Afghanistan", lat:33, lon:65, country:"Afghanistan", type:"country"},
-  {name:"India", lat:22, lon:79, country:"India", type:"country"},
-  {name:"Turkey", lat:39, lon:35, country:"Turkey", type:"country"}
-  // Continue adding all your locations here...
+  {name:"Amu Darya", lat:41, lon:63, type:"river", country:"Afghanistan"},
+  {name:"Syr Darya", lat:44, lon:67, type:"river", country:"Kazakhstan"},
+  {name:"Indus", lat:30, lon:70, type:"river", country:"Pakistan"},
+  {name:"Euphrates", lat:34, lon:40, type:"river", country:"Iraq"},
+  {name:"Tigris", lat:35, lon:44, type:"river", country:"Iraq"},
+  {name:"Nile", lat:26, lon:31, type:"river", country:"Egypt"},
+  {name:"Aral Sea", lat:45, lon:61, type:"sea", country:"Kazakhstan"},
+  {name:"Black Sea", lat:43, lon:35, type:"sea", country:"Turkey"},
+  {name:"Caspian Sea", lat:41, lon:50, type:"sea", country:"Kazakhstan"},
+  {name:"Indian Ocean", lat:-20, lon:80, type:"sea", country:"India"},
+  {name:"Mediterranean Sea", lat:34, lon:18, type:"sea", country:"Egypt"},
+  {name:"Persian Gulf", lat:25, lon:50, type:"sea", country:"Saudi Arabia"},
+  {name:"Red Sea", lat:20, lon:38, type:"sea", country:"Egypt"},
+  {name:"Bosphorus", lat:41, lon:29, type:"sea", country:"Turkey"},
+  {name:"Dardanelles", lat:40, lon:26, type:"sea", country:"Turkey"},
+  {name:"Suez Canal", lat:30, lon:32, type:"river", country:"Egypt"},
+  {name:"Bab el-Mandeb", lat:12, lon:43, type:"sea", country:"Yemen"},
+  {name:"Hormuz", lat:27, lon:56, type:"sea", country:"Iran"},
+  {name:"Afghanistan", lat:33, lon:65, type:"country"},
+  {name:"India", lat:22, lon:79, type:"country"},
+  {name:"Turkey", lat:39, lon:35, type:"country"},
+  {name:"Bahrain", lat:26, lon:50, type:"country"},
+  {name:"China", lat:35, lon:103, type:"country"},
+  {name:"Egypt", lat:26, lon:30, type:"country"},
+  {name:"Pakistan", lat:30, lon:70, type:"country"},
+  {name:"Istanbul", lat:41, lon:29, type:"city", country:"Turkey"},
+  {name:"Mecca", lat:21.4, lon:39.8, type:"city", country:"Saudi Arabia"},
+  {name:"Medina", lat:24.5, lon:39.6, type:"city", country:"Saudi Arabia"}
+  // Add all remaining locations here...
 ];
 
 const map = L.map('map').setView([30, 40], 3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-// Load country polygons
 let countriesLayer;
 fetch('countries.geo.json')
   .then(res => res.json())
@@ -39,7 +47,6 @@ fetch('countries.geo.json')
     showQuestion();
   });
 
-// Draw question
 function showQuestion() {
     if(currentIndex >= LOCATIONS.length){
         document.getElementById('question').innerText = "Quiz finished!";
@@ -49,7 +56,6 @@ function showQuestion() {
     document.getElementById('question').innerHTML = `Find: <b>${LOCATIONS[currentIndex].name}</b>`;
 }
 
-// Check if click is inside country polygon
 function pointInCountry(latlng, countryName){
     let inside = false;
     countriesLayer.eachLayer(layer => {
@@ -62,25 +68,26 @@ function pointInCountry(latlng, countryName){
     return inside;
 }
 
-// Handle clicks
+// Main click handler
 map.on('click', function(e){
     if(currentIndex >= LOCATIONS.length) return;
 
     const loc = LOCATIONS[currentIndex];
     const click = e.latlng;
 
-    // Set tolerance radius
+    // Determine tolerance based on type
     let tolerance = 50000; // default 50 km
-    if(loc.type === "sea") tolerance = 200000; // seas are large
-    if(loc.type === "river") tolerance = 100000; // rivers ~100 km
+    if(loc.type === "sea") tolerance = 250000;
+    if(loc.type === "river") tolerance = 100000;
+    if(loc.type === "city") tolerance = 50000;
+    if(loc.type === "mountain") tolerance = 50000;
 
     let correct = false;
-
     if(loc.type === "country") {
-        if(pointInCountry(click, loc.country)) correct = true;
+        correct = pointInCountry(click, loc.name);
     } else {
         const distance = map.distance(click, [loc.lat, loc.lon]);
-        if(distance < tolerance) correct = true;
+        correct = distance <= tolerance;
     }
 
     if(correct){
@@ -90,7 +97,7 @@ map.on('click', function(e){
         alert(`❌ Wrong! Correct location: ${loc.name}`);
     }
 
-    // Place marker on actual location
+    // Mark the correct location
     L.marker([loc.lat, loc.lon]).addTo(map);
 
     currentIndex++;
