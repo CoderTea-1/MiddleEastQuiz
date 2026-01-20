@@ -1,11 +1,15 @@
+// ---------------------------
+// Quiz State
+// ---------------------------
 let currentIndex = 0;
 let score = 0;
+let countriesLayer;
 
-// -----------------
+// ---------------------------
 // Locations Data
-// -----------------
+// ---------------------------
 const LOCATIONS = [
-  // Countries
+  // ----------------- Countries -----------------
   { name: "Afghanistan", type: "country", countryName: "Afghanistan" },
   { name: "Albania", type: "country", countryName: "Albania" },
   { name: "Armenia", type: "country", countryName: "Armenia" },
@@ -49,7 +53,7 @@ const LOCATIONS = [
   { name: "Uzbekistan", type: "country", countryName: "Uzbekistan" },
   { name: "Yemen", type: "country", countryName: "Yemen" },
 
-  // Seas (polygon examples)
+  // ----------------- Seas (polygon approx.) -----------------
   { name: "Black Sea", type: "sea", geometry: { "type": "Polygon", "coordinates":[[[27,40],[41,40],[41,46],[27,46],[27,40]]] } },
   { name: "Caspian Sea", type: "sea", geometry: { "type": "Polygon", "coordinates":[[[47,36],[54,36],[54,47],[47,47],[47,36]]] } },
   { name: "Mediterranean Sea", type: "sea", geometry: { "type": "Polygon", "coordinates":[[[-6,30],[36,30],[36,46],[-6,46],[-6,30]]] } },
@@ -57,7 +61,7 @@ const LOCATIONS = [
   { name: "Red Sea", type: "sea", geometry: { "type": "Polygon", "coordinates":[[[32,12],[43,12],[43,30],[32,30],[32,12]]] } },
   { name: "Persian Gulf", type: "sea", geometry: { "type": "Polygon", "coordinates":[[[48.5,24],[56,24],[56,30],[48.5,30],[48.5,24]]] } },
 
-  // Rivers (approximate lat/lon)
+  // ----------------- Rivers (lat/lon) -----------------
   { name: "Amu Darya", type: "river", lat: 41, lon: 63 },
   { name: "Syr Darya", type: "river", lat: 41, lon: 67 },
   { name: "Indus", type: "river", lat: 28, lon: 70 },
@@ -65,19 +69,19 @@ const LOCATIONS = [
   { name: "Tigris", type: "river", lat: 33, lon: 44 },
   { name: "Nile", type: "river", lat: 26, lon: 31 },
 
-  // Cities
+  // ----------------- Cities -----------------
   { name: "Aden", type: "city", lat: 12.8, lon: 45 },
   { name: "Herat", type: "city", lat: 34.3, lon: 62 },
   { name: "Istanbul", type: "city", lat: 41, lon: 29 },
   { name: "Mecca", type: "city", lat: 21.4, lon: 39.8 },
   { name: "Medina", type: "city", lat: 24.5, lon: 39.6 },
 
-  // Mountains
+  // ----------------- Mountains -----------------
   { name: "Himalayas", type: "mountain", lat: 28, lon: 85 },
   { name: "Hindu Kush", type: "mountain", lat: 35, lon: 69 },
   { name: "Tien Shan", type: "mountain", lat: 42, lon: 83 },
 
-  // Strait / Canal locations
+  // ----------------- Straits / Canals -----------------
   { name: "Suez Canal", type: "city", lat: 30.6, lon: 32.3 },
   { name: "Bab el-Mandeb", type: "city", lat: 12.6, lon: 43.3 },
   { name: "Hormuz", type: "city", lat: 26.6, lon: 56.3 },
@@ -85,14 +89,15 @@ const LOCATIONS = [
   { name: "Dardanelles", type: "city", lat: 40.1, lon: 26.4 }
 ];
 
-
-// -----------------
+// ---------------------------
 // Initialize Map
-// -----------------
+// ---------------------------
 const map = L.map('map').setView([30, 40], 3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let countriesLayer;
+// ---------------------------
+// Load countries layer
+// ---------------------------
 fetch('countries.geo.json')
   .then(res => res.json())
   .then(geojson => {
@@ -100,21 +105,21 @@ fetch('countries.geo.json')
     showQuestion();
   });
 
-// -----------------
+// ---------------------------
 // Show Question
-// -----------------
-function showQuestion() {
+// ---------------------------
+function showQuestion(){
     if(currentIndex >= LOCATIONS.length){
-        document.getElementById('question').innerText = "Quiz finished!";
-        document.getElementById('score').innerText = `Your score: ${score} / ${LOCATIONS.length}`;
+        document.getElementById('question').innerText = "🏆 Quiz finished!";
+        document.getElementById('score').innerText = `Final score: ${score} / ${LOCATIONS.length}`;
         return;
     }
     document.getElementById('question').innerHTML = `Find: <b>${LOCATIONS[currentIndex].name}</b>`;
 }
 
-// -----------------
-// Country Check
-// -----------------
+// ---------------------------
+// Point in Country
+// ---------------------------
 function pointInCountry(latlng, countryName){
     let inside = false;
     countriesLayer.eachLayer(layer => {
@@ -127,39 +132,38 @@ function pointInCountry(latlng, countryName){
     return inside;
 }
 
-// -----------------
-// Click Detection
-// -----------------
+// ---------------------------
+// Check Click
+// ---------------------------
 function isCorrectClick(loc, click){
     if(loc.type === "country"){
         return pointInCountry(click, loc.countryName);
     } else if(loc.type === "sea" || loc.type === "riverPoly"){
         return turf.booleanPointInPolygon([click.lng, click.lat], loc.geometry);
     } else {
-        // Small rivers, cities, mountains
-        let tolerance = 50000; // 50 km default
+        // Approximate point
+        let tolerance = 50000;
         if(loc.type === "river") tolerance = 150000;
         if(loc.type === "sea") tolerance = 300000;
         if(loc.type === "city") tolerance = 50000;
         if(loc.type === "mountain") tolerance = 50000;
 
-        const distance = map.distance(click, [loc.lat, loc.lon]);
-        return distance <= tolerance;
+        return map.distance(click, [loc.lat, loc.lon]) <= tolerance;
     }
 }
 
-// -----------------
+// ---------------------------
 // Handle Map Click
-// -----------------
+// ---------------------------
 map.on('click', function(e){
     if(currentIndex >= LOCATIONS.length) return;
+    if(!countriesLayer) return; // wait for countries to load
 
     const loc = LOCATIONS[currentIndex];
     const click = e.latlng;
-
     const correct = isCorrectClick(loc, click);
 
-    // Non-blocking feedback
+    // Feedback
     const feedbackDiv = document.getElementById('score');
     if(correct){
         score++;
@@ -168,20 +172,16 @@ map.on('click', function(e){
         feedbackDiv.innerText = `❌ Wrong! Correct location: ${loc.name}. Score: ${score} / ${LOCATIONS.length}`;
     }
 
-    // Place marker at actual location or polygon center
+    // Place marker at correct location
+    let center;
     if(loc.type === "country" || loc.type === "sea" || loc.type === "riverPoly"){
-        let center;
-        if(loc.lat && loc.lon){
-            center = [loc.lat, loc.lon];
-        } else {
-            center = turf.center(loc.geometry).geometry.coordinates.reverse();
-        }
-        L.marker(center).addTo(map);
+        center = loc.lat && loc.lon ? [loc.lat, loc.lon] : turf.center(loc.geometry).geometry.coordinates.reverse();
     } else {
-        L.marker([loc.lat, loc.lon]).addTo(map);
+        center = [loc.lat, loc.lon];
     }
+    L.marker(center).addTo(map);
 
-    // Move to next question
+    // Next question
     currentIndex++;
     showQuestion();
 });
