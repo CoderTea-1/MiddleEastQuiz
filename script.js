@@ -3,7 +3,7 @@ let score = 0;
 let countriesLayer;
 let seasLayer;
 
-// Full location list with lat/lon added
+// Full location list with lat/lon for markers
 const LOCATIONS = [
   // Rivers
   {name:"Amu Darya", type:"river", countries:["Afghanistan","Uzbekistan"], lat:41, lon:63},
@@ -187,14 +187,8 @@ function isCorrect(click, loc){
   }
 
   if(loc.type === "sea"){
-    if(seasLayer){
-      return pointInSea(click, loc.seaName);
-    } else if(loc.lat && loc.lon){
-      const dist = map.distance(click, [loc.lat, loc.lon]);
-      const tolerance = 150000; // 150 km
-      return dist <= tolerance;
-    }
-    return false;
+    // ✅ Correct only if inside polygon
+    return seasLayer ? pointInSea(click, loc.seaName) : false;
   }
 
   // Rivers, Canals, Straits, Cities, Mountains
