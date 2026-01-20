@@ -1,26 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8">
 <title>Map Quiz</title>
+<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<style>
-  body { margin:0; font-family: sans-serif; }
-  #map { width: 100%; height: 70vh; }
-  #quiz { padding: 10px; height: 30vh; box-sizing: border-box; background: #f8f8f8; }
-  #question { font-size: 1.5em; margin-bottom: 10px; }
-  #score { font-size: 1.2em; color: #333; }
-</style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="quiz">
+
+<div id="map"></div>
+<div id="quiz">
     <div id="question">Loading quiz...</div>
     <div id="score"></div>
-  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 <script src="script.js"></script>
+
 </body>
 </html>
