@@ -1,10 +1,29 @@
-body { margin:0; font-family:sans-serif; }
-#map { width: 100%; height: 70vh; }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
 #quiz {
     padding: 10px;
-    height: 30vh;
-    box-sizing: border-box;
     background: #f8f8f8;
+    border-bottom: 2px solid #ddd;
 }
-#question { font-size: 1.5em; margin-bottom: 10px; }
-#score { font-size: 1.2em; color: #333; }
+
+#question {
+    font-size: 1.4em;
+    margin-bottom: 5px;
+}
+
+#feedback {
+    font-size: 1.2em;
+    margin-bottom: 5px;
+}
+
+#score {
+    font-size: 1.2em;
+}
+
+#map {
+    width: 100%;
+    height: 80vh;
+}
