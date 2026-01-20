@@ -13,14 +13,14 @@ const LOCATIONS = [
   {name:"Tigris", type:"river", countries:["Iraq"], lat:35, lon:44},
   {name:"Nile", type:"river", countries:["Egypt","Sudan"], lat:26, lon:31},
 
-  // Seas/Oceans
-  {name:"Aral Sea", type:"sea", seaName:"Aral Sea"},
-  {name:"Black Sea", type:"sea", seaName:"Black Sea"},
-  {name:"Caspian Sea", type:"sea", seaName:"Caspian Sea"},
-  {name:"Indian Ocean", type:"sea", seaName:"Indian Ocean"},
-  {name:"Mediterranean Sea", type:"sea", seaName:"Mediterranean Sea"},
-  {name:"Persian Gulf", type:"sea", seaName:"Persian Gulf"},
-  {name:"Red Sea", type:"sea", seaName:"Red Sea"},
+// Seas/Oceans
+{name:"Aral Sea", type:"sea", seaName:"Aral Sea", lat:45.5, lon:61.5},
+{name:"Black Sea", type:"sea", seaName:"Black Sea", lat:43.0, lon:35.0},
+{name:"Caspian Sea", type:"sea", seaName:"Caspian Sea", lat:41.7, lon:50.3},
+{name:"Indian Ocean", type:"sea", seaName:"Indian Ocean", lat:-20.0, lon:80.0},
+{name:"Mediterranean Sea", type:"sea", seaName:"Mediterranean Sea", lat:35.5, lon:18.0},
+{name:"Persian Gulf", type:"sea", seaName:"Persian Gulf", lat:26.0, lon:52.5},
+{name:"Red Sea", type:"sea", seaName:"Red Sea", lat:19.0, lon:38.5},
 
   // Canals/Straits
   {name:"Bosphorus", type:"strait", countries:["Turkey"], lat:41.1, lon:29.0},
