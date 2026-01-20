@@ -75,17 +75,19 @@ map.on('click', function(e){
     const loc = LOCATIONS[currentIndex];
     const click = e.latlng;
 
-    // Determine tolerance based on type
-    let tolerance = 50000; // default 50 km
-    if(loc.type === "sea") tolerance = 250000;
-    if(loc.type === "river") tolerance = 100000;
+    // Tolerance
+    let tolerance = 50000; // default
+    if(loc.type === "sea") tolerance = 300000;
+    if(loc.type === "river") tolerance = 150000;
     if(loc.type === "city") tolerance = 50000;
     if(loc.type === "mountain") tolerance = 50000;
 
     let correct = false;
-    if(loc.type === "country") {
+
+    if(loc.type === "country"){
         correct = pointInCountry(click, loc.name);
     } else {
+        // Distance from center coordinate
         const distance = map.distance(click, [loc.lat, loc.lon]);
         correct = distance <= tolerance;
     }
@@ -97,7 +99,7 @@ map.on('click', function(e){
         alert(`❌ Wrong! Correct location: ${loc.name}`);
     }
 
-    // Mark the correct location
+    // Place marker
     L.marker([loc.lat, loc.lon]).addTo(map);
 
     currentIndex++;
