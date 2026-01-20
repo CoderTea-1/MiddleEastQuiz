@@ -3,7 +3,7 @@ let score = 0;
 let countriesLayer;
 let seasLayer;
 
-// Full location list (simplified here, include all your previous entries)
+// Full location list with lat/lon added
 const LOCATIONS = [
   // Rivers
   {name:"Amu Darya", type:"river", countries:["Afghanistan","Uzbekistan"], lat:41, lon:63},
@@ -13,14 +13,14 @@ const LOCATIONS = [
   {name:"Tigris", type:"river", countries:["Iraq"], lat:35, lon:44},
   {name:"Nile", type:"river", countries:["Egypt","Sudan"], lat:26, lon:31},
 
-// Seas/Oceans
-{name:"Aral Sea", type:"sea", seaName:"Aral Sea", lat:45.5, lon:61.5},
-{name:"Black Sea", type:"sea", seaName:"Black Sea", lat:43.0, lon:35.0},
-{name:"Caspian Sea", type:"sea", seaName:"Caspian Sea", lat:41.7, lon:50.3},
-{name:"Indian Ocean", type:"sea", seaName:"Indian Ocean", lat:-20.0, lon:80.0},
-{name:"Mediterranean Sea", type:"sea", seaName:"Mediterranean Sea", lat:35.5, lon:18.0},
-{name:"Persian Gulf", type:"sea", seaName:"Persian Gulf", lat:26.0, lon:52.5},
-{name:"Red Sea", type:"sea", seaName:"Red Sea", lat:19.0, lon:38.5},
+  // Seas/Oceans
+  {name:"Aral Sea", type:"sea", seaName:"Aral Sea", lat:45.5, lon:61.5},
+  {name:"Black Sea", type:"sea", seaName:"Black Sea", lat:43.0, lon:35.0},
+  {name:"Caspian Sea", type:"sea", seaName:"Caspian Sea", lat:41.7, lon:50.3},
+  {name:"Indian Ocean", type:"sea", seaName:"Indian Ocean", lat:-20.0, lon:80.0},
+  {name:"Mediterranean Sea", type:"sea", seaName:"Mediterranean Sea", lat:35.5, lon:18.0},
+  {name:"Persian Gulf", type:"sea", seaName:"Persian Gulf", lat:26.0, lon:52.5},
+  {name:"Red Sea", type:"sea", seaName:"Red Sea", lat:19.0, lon:38.5},
 
   // Canals/Straits
   {name:"Bosphorus", type:"strait", countries:["Turkey"], lat:41.1, lon:29.0},
@@ -35,7 +35,7 @@ const LOCATIONS = [
   {name:"Hindu Kush", type:"mountain", countries:["Afghanistan","Pakistan"], lat:35, lon:70},
   {name:"Tien Shan", type:"mountain", countries:["Kyrgyzstan","Kazakhstan"], lat:42, lon:80},
 
-  // Countries (simplified, add all from your list)
+  // Countries
   {name:"Afghanistan", type:"country", countryName:"Afghanistan"},
   {name:"Albania", type:"country", countryName:"Albania"},
   {name:"Armenia", type:"country", countryName:"Armenia"},
@@ -113,7 +113,7 @@ function getMarkerLatLng(loc){
   if(loc.lat && loc.lon) return [loc.lat, loc.lon];
 
   // Country center
-  if(loc.type === "country"){
+  if(loc.type === "country" && countriesLayer){
     let marker = null;
     countriesLayer.eachLayer(layer => {
       if(layer.feature.properties.name === loc.countryName){
@@ -137,7 +137,7 @@ function getMarkerLatLng(loc){
   }
 
   // River/Canal/Strait/City/Mountain → use first country center
-  if(loc.countries && loc.countries.length > 0){
+  if(loc.countries && loc.countries.length > 0 && countriesLayer){
     let marker = null;
     countriesLayer.eachLayer(layer => {
       if(loc.countries.includes(layer.feature.properties.name)){
@@ -187,17 +187,14 @@ function isCorrect(click, loc){
   }
 
   if(loc.type === "sea"){
-    // If polygon exists, use it
-    if(seasLayer) {
+    if(seasLayer){
       return pointInSea(click, loc.seaName);
-    } else if(loc.lat && loc.lon) {
-      // Otherwise, allow within tolerance radius
+    } else if(loc.lat && loc.lon){
       const dist = map.distance(click, [loc.lat, loc.lon]);
       const tolerance = 150000; // 150 km
       return dist <= tolerance;
-    } else {
-      return false;
     }
+    return false;
   }
 
   // Rivers, Canals, Straits, Cities, Mountains
