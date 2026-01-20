@@ -185,8 +185,19 @@ function isCorrect(click, loc){
   if(loc.type === "country"){
     return pointInCountry(click, loc.countryName);
   }
+
   if(loc.type === "sea"){
-    return pointInSea(click, loc.seaName);
+    // If polygon exists, use it
+    if(seasLayer) {
+      return pointInSea(click, loc.seaName);
+    } else if(loc.lat && loc.lon) {
+      // Otherwise, allow within tolerance radius
+      const dist = map.distance(click, [loc.lat, loc.lon]);
+      const tolerance = 150000; // 150 km
+      return dist <= tolerance;
+    } else {
+      return false;
+    }
   }
 
   // Rivers, Canals, Straits, Cities, Mountains
