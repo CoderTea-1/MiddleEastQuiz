@@ -159,14 +159,16 @@ map.on('click', function(e){
 
     const correct = isCorrectClick(loc, click);
 
+    // Non-blocking feedback
+    const feedbackDiv = document.getElementById('score');
     if(correct){
         score++;
-        alert("✅ Correct!");
+        feedbackDiv.innerText = `✅ Correct! Score: ${score} / ${LOCATIONS.length}`;
     } else {
-        alert(`❌ Wrong! Correct location: ${loc.name}`);
+        feedbackDiv.innerText = `❌ Wrong! Correct location: ${loc.name}. Score: ${score} / ${LOCATIONS.length}`;
     }
 
-    // Marker at actual location or center of polygon
+    // Place marker at actual location or polygon center
     if(loc.type === "country" || loc.type === "sea" || loc.type === "riverPoly"){
         let center;
         if(loc.lat && loc.lon){
@@ -179,6 +181,7 @@ map.on('click', function(e){
         L.marker([loc.lat, loc.lon]).addTo(map);
     }
 
+    // Move to next question
     currentIndex++;
     showQuestion();
 });
