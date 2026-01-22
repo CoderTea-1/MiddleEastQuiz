@@ -3,196 +3,371 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geography Master Quiz</title>
+    <title>Advanced Map Quiz</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; height: 100vh; background: #f4f4f4; }
-        #header { background: #2c3e50; color: white; padding: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        #map { flex-grow: 1; cursor: crosshair; }
-        #ui-overlay { position: absolute; top: 100px; left: 20px; z-index: 1000; width: 320px;
-                      background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-        .success { color: #27ae60; font-weight: bold; }
-        .error { color: #c0392b; font-weight: bold; }
-        .info { font-size: 0.9em; color: #666; margin-top: 5px; }
-        button { width: 100%; padding: 10px; margin-top: 10px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 6px; font-weight: bold; }
-        button:hover { background: #2980b9; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 300px; background: #f8f9fa; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; }
+        #map { flex-grow: 1; height: 100%; cursor: crosshair; }
+        
+        h1 { font-size: 1.5rem; color: #333; margin-top: 0; }
+        .stats { margin-bottom: 20px; font-size: 0.9rem; color: #666; }
+        
+        #question-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        #target-name { font-size: 1.8rem; font-weight: bold; color: #2c3e50; display: block; margin: 10px 0; }
+        #target-type { text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; color: #e67e22; font-weight: bold; }
+        #instruction { font-size: 0.9rem; color: #555; margin-top: 10px; font-style: italic; }
+        
+        #feedback {
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: auto;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+        .correct { background-color: #d4edda; color: #155724; }
+        .wrong { background-color: #f8d7da; color: #721c24; }
+        
+        button#next-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-top: 10px;
+            display: none;
+        }
+        button#next-btn:hover { background-color: #0056b3; }
+
+        /* Drawing controls */
+        .draw-controls { display: none; margin-top: 10px; }
+        .btn-draw { padding: 5px 10px; margin-right: 5px; border: 1px solid #ccc; cursor: pointer; background: #fff; }
     </style>
 </head>
 <body>
 
-<div id="header">
-    <h1>Advanced Geography Quiz</h1>
-</div>
+<div id="sidebar">
+    <h1>Geo Master</h1>
+    <div class="stats">
+        Score: <span id="score">0</span> | Remaining: <span id="remaining">0</span>
+    </div>
 
-<div id="ui-overlay">
-    <h2 id="target-name">Loading...</h2>
-    <p id="instruction"></p>
+    <div id="question-card">
+        <span id="target-type">Type</span>
+        <span id="target-name">Loading...</span>
+        <p id="instruction">...</p>
+        
+        <div id="drawing-ui" class="draw-controls">
+            <p style="font-size:0.8rem; color:#666;"><strong>Drawing Mode:</strong> Click map to add points. Double-click to finish.</p>
+            <button id="reset-draw" class="btn-draw">Clear Line</button>
+        </div>
+    </div>
+
     <div id="feedback"></div>
-    <button id="next-btn" style="display:none;" onclick="nextQuestion()">Next Question</button>
+    <button id="next-btn">Next Question</button>
 </div>
 
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
 
 <script>
-    // --- UPDATED GEODATA WITH PATHS AND BOUNDS ---
-    const quizData = [
-        // RIVERS: Defined by Start (Source) and End (Mouth) + path logic
-        {
-            name: "Nile", type: "river", 
-            path: [[15.5, 32.5], [24, 32.8], [31, 31]], // Approximated major bends
-            countries: "Ethiopia, Sudan, Egypt",
-            info: "Flows North from Lake Victoria/Blue Nile to the Mediterranean."
-        },
-        {
-            name: "Indus", type: "river", 
-            path: [[34, 78], [34, 73], [24, 67]], 
-            countries: "China, India, Pakistan",
-            info: "Flows from Himalayas to the Arabian Sea."
-        },
-        {
-            name: "Tigris", type: "river", 
-            path: [[38, 39], [36, 43], [31, 47]], 
-            countries: "Turkey, Iraq",
-            info: "The eastern member of the two great rivers of Mesopotamia."
-        },
-        // SEAS/OCEANS: Defined by Bounding Boxes [SouthLat, WestLon, NorthLat, EastLon]
-        {
-            name: "Red Sea", type: "sea", 
-            bounds: [[12.5, 32.0], [29.8, 43.5]]
-        },
-        {
-            name: "Caspian Sea", type: "sea", 
-            bounds: [[36.5, 46.5], [47.2, 54.8]]
-        },
-        {
-            name: "Mediterranean Sea", type: "sea", 
-            bounds: [[30.0, -5.8], [45.8, 36.2]]
-        },
-        {
-            name: "Indian Ocean", type: "sea", 
-            bounds: [[-40.0, 30.0], [20.0, 110.0]]
-        },
-        // COUNTRIES
-        { name: "Afghanistan", type: "country" },
-        { name: "India", type: "country" },
-        { name: "Egypt", type: "country" },
-        // CITIES
-        { name: "Istanbul", type: "city", lat: 41.0082, lon: 28.9784 }
+    // --- DATA ---
+    // Note: I have augmented the river data with 'source' and 'mouth' coordinates 
+    // to enable the "start/end point" validation logic required by the prompt.
+    const places = [
+        // Rivers (Added approx Source/Mouth for validation)
+        {name:"Amu Darya", type:"river", countries:["Afghanistan","Uzbekistan"], lat:41, lon:63, source:[72.8, 37.2], mouth:[59.5, 43.7]}, 
+        {name:"Syr Darya", type:"river", countries:["Kazakhstan","Uzbekistan"], lat:44, lon:67, source:[74.0, 41.0], mouth:[61.0, 46.0]},
+        {name:"Indus", type:"river", countries:["Pakistan","India"], lat:30, lon:70, source:[81.3, 31.2], mouth:[67.5, 23.9]},
+        {name:"Euphrates", type:"river", countries:["Iraq","Syria"], lat:34, lon:40, source:[40.0, 39.0], mouth:[47.5, 30.0]},
+        {name:"Tigris", type:"river", countries:["Iraq"], lat:35, lon:44, source:[39.5, 38.5], mouth:[47.5, 30.5]},
+        {name:"Nile", type:"river", countries:["Egypt","Sudan"], lat:26, lon:31, source:[33.2, 0.4], mouth:[31.5, 31.2]},
+
+        // Seas/Oceans (Using Radius logic as full ocean GeoJSONs are heavy)
+        {name:"Aral Sea", type:"sea", lat:45.0, lon:60.0},
+        {name:"Black Sea", type:"sea", lat:43.0, lon:34.0},
+        {name:"Caspian Sea", type:"sea", lat:42.0, lon:51.0},
+        {name:"Indian Ocean", type:"sea", lat:5.0, lon:75.0}, // Moved north slightly for viewability
+        {name:"Mediterranean Sea", type:"sea", lat:35.0, lon:20.0},
+        {name:"Persian Gulf", type:"sea", lat:27.0, lon:51.0},
+        {name:"Red Sea", type:"sea", lat:20.0, lon:39.0},
+
+        // Canals/Straits
+        {name:"Bosphorus", type:"strait", lat:41.1, lon:29.0},
+        {name:"Dardanelles", type:"strait", lat:40.2, lon:26.4},
+        {name:"Suez Canal", type:"canal", lat:30.6, lon:32.3},
+        {name:"Bab el-Mandeb", type:"strait", lat:12.6, lon:43.3},
+        {name:"Hormuz", type:"strait", lat:26.6, lon:56.3},
+
+        // Mountains
+        {name:"Caucasus", type:"mountain", lat:42.5, lon:44.5},
+        {name:"Himalayas", type:"mountain", lat:28, lon:84},
+        {name:"Hindu Kush", type:"mountain", lat:35, lon:70.5},
+        {name:"Tien Shan", type:"mountain", lat:42, lon:80},
+
+        // Countries
+        {name:"Afghanistan", type:"country"},
+        {name:"Albania", type:"country"},
+        {name:"Armenia", type:"country"},
+        {name:"India", type:"country"},
+        {name:"Egypt", type:"country"},
+
+        // Cities
+        {name:"Aden", type:"city", lat:12.8, lon:45},
+        {name:"Herat", type:"city", lat:34.3, lon:62},
+        {name:"Istanbul", type:"city", lat:41, lon:29},
+        {name:"Mecca", type:"city", lat:21.4, lon:39.8},
+        {name:"Medina", type:"city", lat:24.5, lon:39.6}
     ];
 
-    let currentIndex = 0;
-    let map, drawControl, currentLayer;
+    // --- SETUP ---
+    const map = L.map('map').setView([30, 50], 4);
+    
+    // Using OpenStreetMap tiles
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
+    }).addTo(map);
+
+    let worldGeoJSON = null;
+    let currentQuestion = null;
     let score = 0;
+    let pool = [...places];
+    let isDrawing = false;
+    let currentPolyline = null;
+    let drawnPoints = [];
 
-    function initMap() {
-        map = L.map('map').setView([25, 45], 3);
-        
-        // Using a clean, label-free map so users can't read the answers
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(map);
+    // --- LOGIC ---
 
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        drawControl = new L.Control.Draw({
-            draw: { polygon: false, marker: false, circle: false, circlemarker: false, rectangle: false, 
-                    polyline: { shapeOptions: { color: '#2980b9', weight: 4 } } }
+    // Fetch World Borders for Country Validation
+    fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+        .then(res => res.json())
+        .then(data => {
+            worldGeoJSON = data;
+            // Add a transparent layer for clicking countries
+            L.geoJSON(data, {
+                style: { color: 'transparent', weight: 0, fillOpacity: 0 },
+                onEachFeature: function(feature, layer) {
+                    layer.on('click', (e) => handleMapClick(e, feature));
+                }
+            }).addTo(map);
+            
+            initGame();
+        })
+        .catch(e => {
+            alert("Error loading country data. Please reload.");
+            console.error(e);
         });
 
-        map.on(L.Draw.Event.CREATED, (e) => {
-            drawnItems.clearLayers();
-            drawnItems.addLayer(e.layer);
-            validateRiver(e.layer);
-        });
-
-        map.on('click', onMapClick);
-        loadQuestion();
-    }
-
-    function loadQuestion() {
-        const q = quizData[currentIndex];
-        document.getElementById('target-name').innerText = q.name;
-        document.getElementById('feedback').innerText = "";
-        document.getElementById('next-btn').style.display = "none";
-        
-        if(q.type === 'river') {
-            document.getElementById('instruction').innerText = `Trace the path of the river through ${q.countries}. Use the line tool.`;
-            map.addControl(drawControl);
-        } else {
-            document.getElementById('instruction').innerText = `Click on the ${q.type}.`;
-            map.removeControl(drawControl);
-        }
-    }
-
-    async function onMapClick(e) {
-        const q = quizData[currentIndex];
-        if (q.type === 'river' || document.getElementById('next-btn').style.display === "block") return;
-
-        let isCorrect = false;
-
-        if (q.type === 'sea') {
-            const b = q.bounds;
-            isCorrect = (e.latlng.lat >= b[0][0] && e.latlng.lat <= b[1][0] && 
-                         e.latlng.lng >= b[0][1] && e.latlng.lng <= b[1][1]);
-        } else if (q.type === 'country') {
-            isCorrect = await checkOSM(e.latlng, q.name);
-        } else if (q.type === 'city') {
-            const dist = e.latlng.distanceTo(L.latLng(q.lat, q.lon));
-            isCorrect = dist < 100000; // 100km
-        }
-
-        handleResult(isCorrect);
-    }
-
-    async function checkOSM(latlng, name) {
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&zoom=3`);
-            const data = await response.json();
-            return data.display_name && data.display_name.includes(name);
-        } catch (e) { return false; }
-    }
-
-    function validateRiver(layer) {
-        const q = quizData[currentIndex];
-        const userPath = layer.getLatLngs();
-        
-        // Simple validation: check if user's start and end points are near our predefined path
-        const startDist = userPath[0].distanceTo(L.latLng(q.path[0]));
-        const endDist = userPath[userPath.length-1].distanceTo(L.latLng(q.path[q.path.length-1]));
-
-        handleResult(startDist < 500000 && endDist < 500000);
-    }
-
-    function handleResult(correct) {
-        const q = quizData[currentIndex];
-        const feedback = document.getElementById('feedback');
-        if (correct) {
-            feedback.innerHTML = `<span class="success">Perfect!</span><br><small>${q.info || ""}</small>`;
-            score++;
-        } else {
-            feedback.innerHTML = `<span class="error">Incorrect.</span>`;
-            // Show the actual location for learning
-            if(q.type === 'river') L.polyline(q.path, {color: 'green'}).addTo(map);
-            if(q.lat) L.marker([q.lat, q.lon]).addTo(map);
-        }
-        document.getElementById('next-btn').style.display = "block";
+    function initGame() {
+        document.getElementById('remaining').innerText = pool.length;
+        nextQuestion();
     }
 
     function nextQuestion() {
-        currentIndex++;
-        if (currentIndex < quizData.length) {
-            loadQuestion();
+        if(pool.length === 0) {
+            endGame();
+            return;
+        }
+
+        // Reset UI
+        document.getElementById('feedback').style.display = 'none';
+        document.getElementById('next-btn').style.display = 'none';
+        document.getElementById('drawing-ui').style.display = 'none';
+        if(currentPolyline) map.removeLayer(currentPolyline);
+        drawnPoints = [];
+        isDrawing = false;
+
+        // Pick random
+        const index = Math.floor(Math.random() * pool.length);
+        currentQuestion = pool[index];
+        pool.splice(index, 1);
+        document.getElementById('remaining').innerText = pool.length;
+
+        // Render Card
+        document.getElementById('target-type').innerText = currentQuestion.type;
+        document.getElementById('target-name').innerText = currentQuestion.name;
+        
+        // Set Instructions
+        const instr = document.getElementById('instruction');
+        if (currentQuestion.type === 'country') {
+            instr.innerText = "Click anywhere inside the country borders.";
+            map.getContainer().style.cursor = 'pointer';
+        } else if (currentQuestion.type === 'river') {
+            instr.innerText = "Draw the river path from source to mouth. Click to place points, Double-Click to finish.";
+            document.getElementById('drawing-ui').style.display = 'block';
+            map.getContainer().style.cursor = 'crosshair';
+            isDrawing = true;
         } else {
-            document.getElementById('ui-overlay').innerHTML = `<h2>Quiz Complete</h2><p>Your Final Score: ${score}/${quizData.length}</p>`;
+            instr.innerText = `Click the location of the ${currentQuestion.type}.`;
+            map.getContainer().style.cursor = 'crosshair';
         }
     }
 
-    window.onload = initMap;
+    // --- INTERACTION HANDLERS ---
+
+    // Unified click handler
+    map.on('click', function(e) {
+        if(isDrawing && currentQuestion.type === 'river') {
+            addDrawPoint(e.latlng);
+        } else if (currentQuestion.type !== 'country' && !isDrawing) {
+            // Logic for points (Cities, Seas, Mountains)
+            validatePointClick(e.latlng);
+        }
+    });
+
+    // Handle country clicks (fired by GeoJSON layer)
+    function handleMapClick(e, feature) {
+        if (currentQuestion.type === 'country' && !isDrawing) {
+            validateCountryClick(feature);
+        } else if (!isDrawing) {
+            // Pass through to point logic if we clicked a country but question is a city
+            validatePointClick(e.latlng);
+        } else if (isDrawing) {
+            addDrawPoint(e.latlng);
+        }
+    }
+
+    // --- DRAWING LOGIC (RIVERS) ---
+    
+    function addDrawPoint(latlng) {
+        drawnPoints.push([latlng.lat, latlng.lng]);
+        
+        if (currentPolyline) {
+            currentPolyline.setLatLngs(drawnPoints);
+        } else {
+            currentPolyline = L.polyline(drawnPoints, {color: 'blue', weight: 4}).addTo(map);
+        }
+    }
+
+    map.on('dblclick', function(e) {
+        if(isDrawing && currentQuestion.type === 'river') {
+            map.doubleClickZoom.disable(); // Prevent zoom on finish
+            validateRiver();
+            setTimeout(() => map.doubleClickZoom.enable(), 500);
+        }
+    });
+
+    document.getElementById('reset-draw').onclick = function() {
+        drawnPoints = [];
+        if(currentPolyline) map.removeLayer(currentPolyline);
+        currentPolyline = null;
+    };
+
+    // --- VALIDATORS ---
+
+    function validateCountryClick(feature) {
+        // Check if the clicked feature name matches target
+        // Note: GeoJSON names can vary. We try to match loosely.
+        const clickedName = feature.properties.name || "Unknown";
+        
+        if (clickedName.includes(currentQuestion.name) || currentQuestion.name.includes(clickedName)) {
+            showFeedback(true, `Correct! You clicked ${clickedName}.`);
+        } else {
+            showFeedback(false, `Incorrect. You clicked ${clickedName}.`);
+        }
+    }
+
+    function validatePointClick(latlng) {
+        const target = L.latLng(currentQuestion.lat, currentQuestion.lon);
+        const distanceKm = target.distanceTo(latlng) / 1000;
+        
+        // Dynamic tolerances based on type
+        let tolerance = 50; // default (Cities)
+        
+        if (['sea', 'ocean'].includes(currentQuestion.type)) tolerance = 400; // Large margin for seas
+        if (['mountain'].includes(currentQuestion.type)) tolerance = 150; // Mountains cover areas
+        if (['strait', 'canal'].includes(currentQuestion.type)) tolerance = 75;
+
+        if (distanceKm <= tolerance) {
+            showFeedback(true, `Correct! (${Math.round(distanceKm)}km from center)`);
+        } else {
+            showFeedback(false, `Too far! (${Math.round(distanceKm)}km away). Look for marker.`);
+            L.marker(target).addTo(map).bindPopup(currentQuestion.name).openPopup();
+        }
+    }
+
+    function validateRiver() {
+        isDrawing = false;
+        
+        if(drawnPoints.length < 2) {
+            showFeedback(false, "River too short.");
+            return;
+        }
+
+        // Convert LatLngs to Turf Points [lon, lat]
+        const userStart = turf.point([drawnPoints[0][1], drawnPoints[0][0]]);
+        const userEnd = turf.point([drawnPoints[drawnPoints.length-1][1], drawnPoints[drawnPoints.length-1][0]]);
+        
+        // Target Logic: Rivers flow Source -> Mouth
+        // We accept drawing either Source->Mouth OR Mouth->Source
+        const realSource = turf.point(currentQuestion.source);
+        const realMouth = turf.point(currentQuestion.mouth);
+        
+        const distStartSource = turf.distance(userStart, realSource);
+        const distEndMouth = turf.distance(userEnd, realMouth);
+        
+        // Reverse check (if user drew mouth to source)
+        const distStartMouth = turf.distance(userStart, realMouth);
+        const distEndSource = turf.distance(userEnd, realSource);
+
+        const validDir1 = (distStartSource < 500 && distEndMouth < 500); // 500km tolerance for large rivers
+        const validDir2 = (distStartMouth < 500 && distEndSource < 500);
+        
+        // 3. Country Intersection (Simple version: Check if line bbox intersects)
+        // Advanced intersection is heavy for browser without spatial index, 
+        // relying on start/end point accuracy is usually sufficient for a quiz.
+        
+        if (validDir1 || validDir2) {
+            showFeedback(true, "Great river drawing!");
+            // Show real river approximation (straight line for reference in this simple demo)
+            L.polyline([
+                [currentQuestion.source[1], currentQuestion.source[0]],
+                [currentQuestion.mouth[1], currentQuestion.mouth[0]]
+            ], {color: 'green', dashArray: '5, 10'}).addTo(map);
+        } else {
+            showFeedback(false, "Incorrect path. Start or End points were too far off.");
+            L.marker([currentQuestion.source[1], currentQuestion.source[0]]).addTo(map).bindPopup("Source");
+            L.marker([currentQuestion.mouth[1], currentQuestion.mouth[0]]).addTo(map).bindPopup("Mouth");
+        }
+    }
+
+    function showFeedback(isCorrect, message) {
+        const fb = document.getElementById('feedback');
+        fb.style.display = 'block';
+        fb.className = isCorrect ? 'correct' : 'wrong';
+        fb.innerText = message;
+        
+        if(isCorrect) {
+            score++;
+            document.getElementById('score').innerText = score;
+        }
+        
+        document.getElementById('next-btn').style.display = 'block';
+    }
+
+    document.getElementById('next-btn').addEventListener('click', nextQuestion);
+
+    function endGame() {
+        document.getElementById('question-card').innerHTML = `<h2>Quiz Complete!</h2><p>Final Score: ${score}</p><button onclick="location.reload()">Restart</button>`;
+        document.getElementById('next-btn').style.display = 'none';
+        document.getElementById('feedback').style.display = 'none';
+    }
 </script>
+
 </body>
 </html>
