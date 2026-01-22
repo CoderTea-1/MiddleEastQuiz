@@ -87,8 +87,14 @@
 
 <script>
     // --- DATA ---
-    // Note: I have augmented the river data with 'source' and 'mouth' coordinates 
-    // to enable the "start/end point" validation logic required by the prompt.
+    
+    // Manual Polygon for Indian Ocean to fix the "click too far" issue.
+    // Coordinates are [Lon, Lat] because that is GeoJSON format
+    const indianOceanPoly = [
+        [30, -30], [50, -30], [115, -35], [115, -15], [100, 0], 
+        [95, 20], [80, 20], [60, 25], [50, 15], [40, 12], [30, -5], [30, -30]
+    ];
+
     const places = [
         // Rivers (Added approx Source/Mouth for validation)
         {name:"Amu Darya", type:"river", countries:["Afghanistan","Uzbekistan"], lat:41, lon:63, source:[72.8, 37.2], mouth:[59.5, 43.7]}, 
@@ -98,11 +104,12 @@
         {name:"Tigris", type:"river", countries:["Iraq"], lat:35, lon:44, source:[39.5, 38.5], mouth:[47.5, 30.5]},
         {name:"Nile", type:"river", countries:["Egypt","Sudan"], lat:26, lon:31, source:[33.2, 0.4], mouth:[31.5, 31.2]},
 
-        // Seas/Oceans (Using Radius logic as full ocean GeoJSONs are heavy)
+        // Seas/Oceans
+        // Note: Indian Ocean now uses a custom boundary polygon
+        {name:"Indian Ocean", type:"sea", boundary: indianOceanPoly, lat:-20.0, lon:80.0},
         {name:"Aral Sea", type:"sea", lat:45.0, lon:60.0},
         {name:"Black Sea", type:"sea", lat:43.0, lon:34.0},
         {name:"Caspian Sea", type:"sea", lat:42.0, lon:51.0},
-        {name:"Indian Ocean", type:"sea", lat:5.0, lon:75.0}, // Moved north slightly for viewability
         {name:"Mediterranean Sea", type:"sea", lat:35.0, lon:20.0},
         {name:"Persian Gulf", type:"sea", lat:27.0, lon:51.0},
         {name:"Red Sea", type:"sea", lat:20.0, lon:39.0},
@@ -138,7 +145,6 @@
     // --- SETUP ---
     const map = L.map('map').setView([30, 50], 4);
     
-    // Using OpenStreetMap tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
     }).addTo(map);
@@ -150,10 +156,12 @@
     let isDrawing = false;
     let currentPolyline = null;
     let drawnPoints = [];
+    
+    // Debug layer for development (uncomment to see Indian Ocean polygon)
+    // L.polygon(indianOceanPoly.map(p => [p[1], p[0]]), {color: 'red', fillOpacity:0.1}).addTo(map);
 
     // --- LOGIC ---
 
-    // Fetch World Borders for Country Validation
     fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
         .then(res => res.json())
         .then(data => {
@@ -220,22 +228,19 @@
 
     // --- INTERACTION HANDLERS ---
 
-    // Unified click handler
     map.on('click', function(e) {
         if(isDrawing && currentQuestion.type === 'river') {
             addDrawPoint(e.latlng);
         } else if (currentQuestion.type !== 'country' && !isDrawing) {
-            // Logic for points (Cities, Seas, Mountains)
             validatePointClick(e.latlng);
         }
     });
 
-    // Handle country clicks (fired by GeoJSON layer)
     function handleMapClick(e, feature) {
         if (currentQuestion.type === 'country' && !isDrawing) {
             validateCountryClick(feature);
         } else if (!isDrawing) {
-            // Pass through to point logic if we clicked a country but question is a city
+            // Pass through to point logic
             validatePointClick(e.latlng);
         } else if (isDrawing) {
             addDrawPoint(e.latlng);
@@ -256,7 +261,7 @@
 
     map.on('dblclick', function(e) {
         if(isDrawing && currentQuestion.type === 'river') {
-            map.doubleClickZoom.disable(); // Prevent zoom on finish
+            map.doubleClickZoom.disable(); 
             validateRiver();
             setTimeout(() => map.doubleClickZoom.enable(), 500);
         }
@@ -271,10 +276,7 @@
     // --- VALIDATORS ---
 
     function validateCountryClick(feature) {
-        // Check if the clicked feature name matches target
-        // Note: GeoJSON names can vary. We try to match loosely.
         const clickedName = feature.properties.name || "Unknown";
-        
         if (clickedName.includes(currentQuestion.name) || currentQuestion.name.includes(clickedName)) {
             showFeedback(true, `Correct! You clicked ${clickedName}.`);
         } else {
@@ -283,21 +285,41 @@
     }
 
     function validatePointClick(latlng) {
+        // 1. Check if the question has a custom Boundary (Polygon) - Fixes Indian Ocean
+        if (currentQuestion.boundary) {
+            // Create a Turf polygon. Note: Turf expects [ [ [lon, lat], ... ] ]
+            // We need to close the loop if not closed, but booleanPointInPolygon handles it mostly.
+            // Our data is array of points, we wrap it in an array for the ring.
+            const poly = turf.polygon([currentQuestion.boundary]);
+            const pt = turf.point([latlng.lng, latlng.lat]);
+            
+            if (turf.booleanPointInPolygon(pt, poly)) {
+                showFeedback(true, "Correct! You are inside the region.");
+                return;
+            }
+        }
+
+        // 2. Fallback to Distance Check for standard points
         const target = L.latLng(currentQuestion.lat, currentQuestion.lon);
         const distanceKm = target.distanceTo(latlng) / 1000;
         
-        // Dynamic tolerances based on type
         let tolerance = 50; // default (Cities)
         
-        if (['sea', 'ocean'].includes(currentQuestion.type)) tolerance = 400; // Large margin for seas
-        if (['mountain'].includes(currentQuestion.type)) tolerance = 150; // Mountains cover areas
+        if (['sea', 'ocean'].includes(currentQuestion.type)) tolerance = 400; 
+        if (['mountain'].includes(currentQuestion.type)) tolerance = 150; 
         if (['strait', 'canal'].includes(currentQuestion.type)) tolerance = 75;
 
+        // If validation failed via boundary, we might still check distance (optional),
+        // but generally if boundary exists, distance is irrelevant.
+        // Here we just use distance if NO boundary exists.
+        
         if (distanceKm <= tolerance) {
             showFeedback(true, `Correct! (${Math.round(distanceKm)}km from center)`);
         } else {
             showFeedback(false, `Too far! (${Math.round(distanceKm)}km away). Look for marker.`);
-            L.marker(target).addTo(map).bindPopup(currentQuestion.name).openPopup();
+            if(!currentQuestion.boundary) {
+                 L.marker(target).addTo(map).bindPopup(currentQuestion.name).openPopup();
+            }
         }
     }
 
@@ -309,32 +331,24 @@
             return;
         }
 
-        // Convert LatLngs to Turf Points [lon, lat]
         const userStart = turf.point([drawnPoints[0][1], drawnPoints[0][0]]);
         const userEnd = turf.point([drawnPoints[drawnPoints.length-1][1], drawnPoints[drawnPoints.length-1][0]]);
         
-        // Target Logic: Rivers flow Source -> Mouth
-        // We accept drawing either Source->Mouth OR Mouth->Source
         const realSource = turf.point(currentQuestion.source);
         const realMouth = turf.point(currentQuestion.mouth);
         
         const distStartSource = turf.distance(userStart, realSource);
         const distEndMouth = turf.distance(userEnd, realMouth);
         
-        // Reverse check (if user drew mouth to source)
+        // Reverse check
         const distStartMouth = turf.distance(userStart, realMouth);
         const distEndSource = turf.distance(userEnd, realSource);
 
-        const validDir1 = (distStartSource < 500 && distEndMouth < 500); // 500km tolerance for large rivers
+        const validDir1 = (distStartSource < 500 && distEndMouth < 500); 
         const validDir2 = (distStartMouth < 500 && distEndSource < 500);
-        
-        // 3. Country Intersection (Simple version: Check if line bbox intersects)
-        // Advanced intersection is heavy for browser without spatial index, 
-        // relying on start/end point accuracy is usually sufficient for a quiz.
         
         if (validDir1 || validDir2) {
             showFeedback(true, "Great river drawing!");
-            // Show real river approximation (straight line for reference in this simple demo)
             L.polyline([
                 [currentQuestion.source[1], currentQuestion.source[0]],
                 [currentQuestion.mouth[1], currentQuestion.mouth[0]]
