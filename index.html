@@ -1,23 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>World Map Quiz</title>
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geography Pro Map Quiz</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <style>
+        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        #header { background: #333; color: white; padding: 1rem; text-align: center; }
+        #map { flex-grow: 1; cursor: crosshair; }
+        #ui-overlay { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 1000; 
+                      background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                      text-align: center; min-width: 300px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        button { padding: 8px 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    </style>
 </head>
 <body>
 
-<div id="quiz">
-  <div id="question">Loading quiz...</div>
-  <div id="feedback"></div>
-  <div id="score"></div>
+<div id="header">
+    <h1>World Geography Quiz</h1>
+    <p>Locate the requested feature on the map.</p>
+</div>
+
+<div id="ui-overlay">
+    <h2 id="target-name">Loading...</h2>
+    <p id="instruction">Click the location on the map.</p>
+    <div id="feedback"></div>
+    <button id="next-btn" style="display:none;" onclick="nextQuestion()">Next Question</button>
 </div>
 
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
-<script src="script.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<script>
+    // --- DATA ---
+    const quizData = [
+        {name:"Amu Darya", type:"river", lat:41, lon:63},
+        {name:"Syr Darya", type:"river", lat:44, lon:67},
+        {name:"Indus", type:"river", lat:30, lon:70},
+        {name:"Euphrates", type:"river", lat:34, lon:40},
+        {name:"Tigris", type:"river", lat:35, lon:44},
+        {name:"Nile", type:"river", lat:26, lon:31},
+        {name:"Aral Sea", type:"sea", lat:45.5, lon:61.5},
+        {name:"Black Sea", type:"sea", lat:43.0, lon:35.0},
+        {name:"Caspian Sea", type:"sea", lat:41.7, lon:50.3},
+        {name:"Indian Ocean", type:"sea", lat:-20.0, lon:80.0},
+        {name:"Mediterranean Sea", type:"sea", lat:35.5, lon:18.0},
+        {name:"Persian Gulf", type:"sea", lat:26.0, lon:52.5},
+        {name:"Red Sea", type:"sea", lat:19.0, lon:38.5},
+        {name:"Bosphorus", type:"strait", lat:41.1, lon:29.0},
+        {name:"Dardanelles", type:"strait", lat:40.2, lon:26.4},
+        {name:"Suez Canal", type:"canal", lat:30.5, lon:32.3},
+        {name:"Bab el-Mandeb", type:"strait", lat:12.6, lon:43.3},
+        {name:"Hormuz", type:"strait", lat:26.6, lon:56.3},
+        {name:"Caucasus", type:"mountain", lat:42.5, lon:44.5},
+        {name:"Himalayas", type:"mountain", lat:28, lon:87},
+        {name:"Hindu Kush", type:"mountain", lat:35, lon:70},
+        {name:"Tien Shan", type:"mountain", lat:42, lon:80},
+        {name:"Afghanistan", type:"country"},
+        {name:"India", type:"country"},
+        {name:"Egypt", type:"country"},
+        {name:"Aden", type:"city", lat:12.8, lon:45},
+        {name:"Herat", type:"city", lat:34.3, lon:62},
+        {name:"Istanbul", type:"city", lat:41, lon:29},
+        {name:"Mecca", type:"city", lat:21.4, lon:39.8},
+        {name:"Medina", type:"city", lat:24.5, lon:39.6}
+    ];
+
+    let currentIndex = 0;
+    let map, drawControl, currentLayer;
+    let score = 0;
+
+    // --- INITIALIZE MAP ---
+    function initMap() {
+        map = L.map('map').setView([30, 45], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        // Feature Group for drawing rivers
+        const drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        drawControl = new L.Control.Draw({
+            draw: { polygon: false, marker: false, circle: false, circlemarker: false, rectangle: false, 
+                    polyline: { shapeOptions: { color: '#3388ff' } } },
+            edit: { featureGroup: drawnItems }
+        });
+
+        map.on(L.Draw.Event.CREATED, function (event) {
+            const layer = event.layer;
+            drawnItems.addLayer(layer);
+            checkRiver(layer);
+        });
+
+        map.on('click', onMapClick);
+        loadQuestion();
+    }
+
+    // --- LOGIC ---
+    function loadQuestion() {
+        const q = quizData[currentIndex];
+        document.getElementById('target-name').innerText = `Find: ${q.name}`;
+        document.getElementById('feedback').innerText = "";
+        document.getElementById('next-btn').style.display = "none";
+        
+        if(q.type === 'river') {
+            document.getElementById('instruction').innerText = "Use the Polyline tool on the left to draw the river.";
+            map.addControl(drawControl);
+        } else {
+            document.getElementById('instruction').innerText = "Click the location on the map.";
+            map.removeControl(drawControl);
+        }
+    }
+
+    async function onMapClick(e) {
+        const q = quizData[currentIndex];
+        if (q.type === 'river' || document.getElementById('next-btn').style.display === "block") return;
+
+        let isCorrect = false;
+
+        if (q.type === 'country' || q.type === 'sea') {
+            isCorrect = await checkBoundary(e.latlng, q.name);
+        } else {
+            // Distance check for cities, mountains, straits
+            const dist = e.latlng.distanceTo(L.latLng(q.lat, q.lon));
+            isCorrect = dist < 150000; // 150km tolerance
+        }
+
+        handleResult(isCorrect, [q.lat || e.latlng.lat, q.lon || e.latlng.lng]);
+    }
+
+    async function checkBoundary(latlng, name) {
+        // We use Nominatim to get the polygon of the clicked point and see if it matches the name
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&zoom=3`);
+            const data = await response.json();
+            return data.display_name.includes(name);
+        } catch (e) { return false; }
+    }
+
+    function checkRiver(layer) {
+        const q = quizData[currentIndex];
+        const points = layer.getLatLngs();
+        const target = L.latLng(q.lat, q.lon);
+        
+        // Check if any point of the drawn line is near the river's anchor point
+        let near = false;
+        points.forEach(p => {
+            if (p.distanceTo(target) < 300000) near = true; 
+        });
+
+        handleResult(near, [q.lat, q.lon]);
+    }
+
+    function handleResult(correct, coords) {
+        const feedback = document.getElementById('feedback');
+        if (correct) {
+            feedback.innerHTML = `<span class="success">Correct!</span>`;
+            score++;
+        } else {
+            feedback.innerHTML = `<span class="error">Incorrect. It's marked in red.</span>`;
+            L.circle(coords, {radius: 50000, color: 'red'}).addTo(map);
+        }
+        document.getElementById('next-btn').style.display = "block";
+    }
+
+    function nextQuestion() {
+        currentIndex++;
+        if (currentIndex < quizData.length) {
+            loadQuestion();
+        } else {
+            document.getElementById('ui-overlay').innerHTML = `<h2>Quiz Finished!</h2><p>Your Score: ${score}/${quizData.length}</p>`;
+        }
+    }
+
+    window.onload = initMap;
+</script>
 </body>
 </html>
