@@ -1,3 +1,7 @@
+//SEAS STILL DOESN'T WORK
+
+
+
 let currentIndex = 0;
 let score = 0;
 let countriesLayer;
